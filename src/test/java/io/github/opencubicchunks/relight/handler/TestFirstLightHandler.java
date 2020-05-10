@@ -23,15 +23,98 @@
  */
 package io.github.opencubicchunks.relight.handler;
 
-import io.github.opencubicchunks.relight.testutil.TestUtils;
-import io.github.opencubicchunks.relight.world.ChunkLayout;
+import io.github.opencubicchunks.relight.propagator.NoopLightPropagator;
+import io.github.opencubicchunks.relight.testutil.WorldAccessTestImpl;
+import io.github.opencubicchunks.relight.util.BlockPos;
+import io.github.opencubicchunks.relight.util.ChunkPos;
+import io.github.opencubicchunks.relight.util.LightType;
+import io.github.opencubicchunks.relight.util.Vec3List;
 import org.junit.Test;
 
-public class TestFirstLightHandler {
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Random;
+import java.util.Set;
 
+public class TestFirstLightHandler {
     @Test
     public void testEmptyCubicChunksFullyLit() {
-        ChunkLayout cubicChunksLayout = TestUtils.cubicChunksLayout();
+        Random rand = new Random(42);
+        Set<ChunkPos> preLoadedChunks = new HashSet<>();
+        Set<ChunkPos> newChunks = new HashSet<>();
+        Set<BlockPos> oldOpaqueBlocks = new HashSet<>();
+        Set<BlockPos> newOpaqueBlocks = new HashSet<>();
+        Set<BlockPos> oldBlockLightSources = new HashSet<>();
+        Set<BlockPos> newBlockLightSources = new HashSet<>();
 
+        for (int i = 0; i < 200; i++) {
+            preLoadedChunks.add(new ChunkPos(rand.nextInt(20), rand.nextInt(20), rand.nextInt(20)));
+        }
+
+        for (int i = 0; i < 20; i++) {
+            newChunks.add(new ChunkPos(rand.nextInt(20), rand.nextInt(20), rand.nextInt(20)));
+        }
+
+        for (ChunkPos pos : preLoadedChunks) {
+            for (int i = 0; i < 200; i++) {
+                BlockPos block = new BlockPos(
+                    pos.minBlockX() + rand.nextInt(16),
+                    pos.minBlockY() + rand.nextInt(16),
+                    pos.minBlockZ() + rand.nextInt(16)
+                );
+                oldOpaqueBlocks.add(block);
+            }
+            for (int i = 0; i < 10; i++) {
+                BlockPos block = new BlockPos(
+                    pos.minBlockX() + rand.nextInt(16),
+                    pos.minBlockY() + rand.nextInt(16),
+                    pos.minBlockZ() + rand.nextInt(16)
+                );
+                oldBlockLightSources.add(block);
+            }
+        }
+        for (ChunkPos pos : newChunks) {
+            for (int i = 0; i < 200; i++) {
+                BlockPos block = new BlockPos(
+                    pos.minBlockX() + rand.nextInt(16),
+                    pos.minBlockY() + rand.nextInt(16),
+                    pos.minBlockZ() + rand.nextInt(16)
+                );
+                newOpaqueBlocks.add(block);
+            }
+            for (int i = 0; i < 10; i++) {
+                BlockPos block = new BlockPos(
+                    pos.minBlockX() + rand.nextInt(16),
+                    pos.minBlockY() + rand.nextInt(16),
+                    pos.minBlockZ() + rand.nextInt(16)
+                );
+                newBlockLightSources.add(block);
+            }
+        }
+        doTest(preLoadedChunks, newChunks, oldOpaqueBlocks, newOpaqueBlocks, oldBlockLightSources, newBlockLightSources);
     }
+
+    private void doTest(Set<ChunkPos> preLoadedChunks,
+        Set<ChunkPos> newChunks,
+        Set<BlockPos> oldOpaqueBlocks,
+        Set<BlockPos> newOpaqueBlocks,
+        Set<BlockPos> oldBlockLightSources,
+        Set<BlockPos> newBlockLightSources) {
+
+        WorldAccessTestImpl worldAccess = new WorldAccessTestImpl(preLoadedChunks, newChunks, oldOpaqueBlocks, newOpaqueBlocks,
+            oldBlockLightSources, newBlockLightSources);
+
+        FirstLightHandler handler = new FirstLightHandler(worldAccess);
+
+        Vec3List updatedSky = new Vec3List(100000);
+        Vec3List updatedBlock = new Vec3List(100000);
+        handler.apply(newChunks, updatedSky, updatedBlock);
+
+        NoopLightPropagator propagator = new NoopLightPropagator(worldAccess, worldAccess);
+        propagator.update(updatedSky, EnumSet.of(LightType.SKY));
+        propagator.update(updatedBlock, EnumSet.of(LightType.BLOCK));
+
+        worldAccess.verifyLight();
+    }
+
 }
